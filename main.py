@@ -29,10 +29,9 @@ def classify_parking_spots_infinite_loop(video_path):
         blue_mask = cv2.inRange(hsv, blue_lower, blue_upper)
         yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
 
-
         # Niepełonosprawni
         contours_blue, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        spot_number = 1  # Numerowanie miejsc
+        spot_number = 0  # Numerowanie miejsc
 
         for cnt in contours_blue:
             x, y, w, h = cv2.boundingRect(cnt)
@@ -41,7 +40,6 @@ def classify_parking_spots_infinite_loop(video_path):
                 cv2.putText(frame, f'[{spot_number}] Niepelnosprawni', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                             (255, 0, 0), 2)
                 spot_number += 1
-
         # Kierowniki
         contours_yellow, _ = cv2.findContours(yellow_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in contours_yellow:
@@ -54,13 +52,21 @@ def classify_parking_spots_infinite_loop(video_path):
 
         # Zwykłe
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+        edges = cv2.Canny(gray, 50, 150, apertureSize=3)  # Wykrywanie krawędzi
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=50, maxLineGap=10)
 
-        contours_other, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        parking_spots = []
+
+        if lines is not None:
+            for line in lines:
+                x1, y1, x2, y2 = line[0]
+                cv2.line(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)  # Rysowanie wykrytych linii
+
+        contours_other, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         for cnt in contours_other:
             x, y, w, h = cv2.boundingRect(cnt)
             aspect_ratio = w / float(h)
-            if 0.5 < aspect_ratio < 3.0 and 500 < cv2.contourArea(cnt) < 3000:
+            if 0.5 < aspect_ratio < 3.0 and cv2.contourArea(cnt) > 2000:  # Prostokąty o odpowiednim rozmiarze
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
                 cv2.putText(frame, f'[{spot_number}] Zwykle', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
                             2)
@@ -73,5 +79,7 @@ def classify_parking_spots_infinite_loop(video_path):
 
     cap.release()
     cv2.destroyAllWindows()
+
+
 
 classify_parking_spots_infinite_loop('vid1.mp4')
