@@ -81,7 +81,7 @@ def draw_parking_boundary(frame, points):
     parking_width = (width - entrance_width) // 4
 
     # Podział na 3 wiersze
-    row_heights = [0.35 * height, 0.30 * height, 0.35 * height]
+    row_heights = [0.33 * height, 0.34 * height, 0.33 * height]
     row_starts = [y_min + int(sum(row_heights[:i])) for i in range(3)]
     row_starts.append(y_max)
 
