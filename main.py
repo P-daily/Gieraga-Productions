@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 
-
+#Wykrywanie granic parkingu
 def detect_and_mark_red_points(frame):
 
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -40,7 +40,7 @@ def detect_and_mark_red_points(frame):
 
     return points
 
-
+# Funkcja pomocnicza do rozpoznawania miejsc uprzywilejowanych
 def analyze_color_in_area(frame, top_left, bottom_right):
     roi = frame[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
     hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
@@ -59,7 +59,7 @@ def analyze_color_in_area(frame, top_left, bottom_right):
 
     return blue_count, yellow_count
 
-
+# Rysowanie układu i generewanie data-packu struktury parkingu
 def draw_parking_boundary(frame, points):
 
     if not points:
@@ -167,7 +167,7 @@ def draw_parking_boundary(frame, points):
 
 
 
-
+# Wywołanie i pokazanie działania
 video_path = "vid1.mp4"
 cap = cv2.VideoCapture(video_path)
 
