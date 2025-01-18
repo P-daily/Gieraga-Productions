@@ -2,84 +2,214 @@ import cv2
 import numpy as np
 
 
-def classify_parking_spots_infinite_loop(video_path):
-    cap = cv2.VideoCapture(video_path)
+def detect_and_mark_red_points(frame):
 
-    if not cap.isOpened():
-        print("Nie można otworzyć pliku wideo.")
-        return
+    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    while True:
-        ret, frame = cap.read()
+    #Zakres czerwonego
+    lower_red1 = np.array([0, 120, 70])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 120, 70])
+    upper_red2 = np.array([180, 255, 255])
 
-        if not ret:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            continue
+    # Maska czerwonego
+    mask1 = cv2.inRange(hsv, lower_red1, upper_red1)
+    mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+    red_mask = mask1 + mask2
 
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+    contours, _ = cv2.findContours(red_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        # Kolory w HSV (podobno lepiej)
-        blue_lower = np.array([100, 150, 50])
-        blue_upper = np.array([140, 255, 255])
+    points = []
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        perimeter = cv2.arcLength(contour, True)
 
-        yellow_lower = np.array([20, 100, 100])
-        yellow_upper = np.array([30, 255, 255])
-
-        # Maski dla specjalsów
-        blue_mask = cv2.inRange(hsv, blue_lower, blue_upper)
-        yellow_mask = cv2.inRange(hsv, yellow_lower, yellow_upper)
-
-        # Niepełonosprawni
-        contours_blue, _ = cv2.findContours(blue_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        spot_number = 0  # Numerowanie miejsc
-
-        for cnt in contours_blue:
-            x, y, w, h = cv2.boundingRect(cnt)
-            if cv2.contourArea(cnt) > 500:  # Pomijanie małych obiektów
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
-                cv2.putText(frame, f'[{spot_number}] Niepelnosprawni', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                            (255, 0, 0), 2)
-                spot_number += 1
-        # Kierowniki
-        contours_yellow, _ = cv2.findContours(yellow_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in contours_yellow:
-            x, y, w, h = cv2.boundingRect(cnt)
-            if cv2.contourArea(cnt) > 500:
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 255), 2)
-                cv2.putText(frame, f'[{spot_number}] Kierownictwo', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                            (0, 255, 255), 2)
-                spot_number += 1
-
-        # Zwykłe
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        edges = cv2.Canny(gray, 50, 150, apertureSize=3)  # Wykrywanie krawędzi
-        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=50, maxLineGap=10)
-
-        parking_spots = []
-
-        if lines is not None:
-            for line in lines:
-                x1, y1, x2, y2 = line[0]
-                cv2.line(frame, (x1, y1), (x2, y2), (255, 255, 255), 2)  # Rysowanie wykrytych linii
-
-        contours_other, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        for cnt in contours_other:
-            x, y, w, h = cv2.boundingRect(cnt)
-            aspect_ratio = w / float(h)
-            if 0.5 < aspect_ratio < 3.0 and cv2.contourArea(cnt) > 2000:  # Prostokąty o odpowiednim rozmiarze
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                cv2.putText(frame, f'[{spot_number}] Zwykle', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0),
-                            2)
-                spot_number += 1
-
-        cv2.imshow('Parking Classification', frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
+        if perimeter > 0:
+            circularity = (4 * np.pi * area) / (perimeter ** 2)
+        else:
+            circularity = 0
 
 
+        if 100 <= area <= 800 and 0.3 <= circularity <= 1.0:
+            M = cv2.moments(contour)
+            if M["m00"] != 0:
+                # środek obszaru
+                cx = int(M["m10"] / M["m00"])
+                cy = int(M["m01"] / M["m00"])
+                points.append((cx, cy))
 
-classify_parking_spots_infinite_loop('vid1.mp4')
+    return points
+
+
+def analyze_color_in_area(frame, top_left, bottom_right):
+    roi = frame[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+    hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
+
+    # niebieski
+    lower_blue = np.array([100, 150, 50])
+    upper_blue = np.array([140, 255, 255])
+    blue_mask = cv2.inRange(hsv, lower_blue, upper_blue)
+    blue_count = cv2.countNonZero(blue_mask)
+
+    # żółty
+    lower_yellow = np.array([20, 100, 100])
+    upper_yellow = np.array([30, 255, 255])
+    yellow_mask = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    yellow_count = cv2.countNonZero(yellow_mask)
+
+    return blue_count, yellow_count
+
+
+def draw_parking_boundary(frame, points):
+
+    if not points:
+        return frame, []
+
+    points = np.array(points)
+    x_min, y_min = np.min(points, axis=0)
+    x_max, y_max = np.max(points, axis=0)
+
+
+    cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+
+    # wymiary 'parkingu'
+    height = y_max - y_min
+    width = x_max - x_min
+
+    # Wymiary kolumn
+    entrance_width = int(0.25 * width)
+    parking_width = (width - entrance_width) // 4
+
+    # Podział na 3 wiersze
+    row_heights = [0.35 * height, 0.30 * height, 0.35 * height]
+    row_starts = [y_min + int(sum(row_heights[:i])) for i in range(3)]
+    row_starts.append(y_max)
+
+    # Punkty początkowe kolumn
+    col_starts = [x_min + i * parking_width for i in range(4)]
+    col_starts.append(x_max - entrance_width)
+    col_starts.append(x_max)
+
+    # Kolorki
+    parking_areas = []
+    for row_idx in [0, 2]:
+        for col_idx in range(4):
+            top_left = (col_starts[col_idx], row_starts[row_idx])
+            bottom_right = (col_starts[col_idx + 1], row_starts[row_idx + 1])
+            blue_count, yellow_count = analyze_color_in_area(frame, top_left, bottom_right)
+            parking_areas.append((blue_count, yellow_count, top_left, bottom_right))
+
+    # Niebieskie i zółte miejsca
+    inwalidzi_idx = max(range(len(parking_areas)), key=lambda i: parking_areas[i][0])
+    kierownictwo_idx = max(range(len(parking_areas)), key=lambda i: parking_areas[i][1])
+
+    # miejsca parkingowe
+    parking_data = []
+
+    # Rysowanie miejsc parkingowych i label
+    label = 1
+    for idx, (blue_count, yellow_count, top_left, bottom_right) in enumerate(parking_areas):
+        color = (0, 255, 255)  #Żółty
+        area_type = "N"  #Normlne
+
+        if idx == inwalidzi_idx:
+            area_type = "I"  # Inwalidzi
+            color = (255, 0, 0)  # Niebieski
+        elif idx == kierownictwo_idx:
+            area_type = "K"  # Kierownictwo
+            color = (0, 255, 255)  # Żółty
+
+        # Dodanie informacji do danych
+        parking_data.append({
+            "id": label,
+            "type": area_type,
+            "top_left": top_left,
+            "bottom_right": bottom_right
+        })
+
+        # Rysowanie
+        cv2.rectangle(frame, top_left, bottom_right, (255, 0, 0), 2)
+        cv2.putText(frame, f"{label} {area_type}",
+                    (top_left[0] + 10, top_left[1] + 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        label += 1
+
+    # droga
+    road_top_left = (x_min, row_starts[1])
+    road_bottom_right = (x_max - entrance_width, row_starts[2])
+    cv2.putText(frame, "droga",
+                (x_min + 10, row_starts[1] + int(row_heights[1] // 2)),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2)
+
+    parking_data.append({
+        "id": "D",
+        "type": "D",  # Droga
+        "top_left": road_top_left,
+        "bottom_right": road_bottom_right
+    })
+
+    # Wjazd
+    entrance_top_left = (col_starts[-2], y_min)
+    entrance_bottom_right = (col_starts[-1], y_max)
+    cv2.rectangle(frame, entrance_top_left, entrance_bottom_right, (0, 0, 255), 2)
+    cv2.putText(frame, "Wjazd",
+                (entrance_top_left[0] + 10, entrance_top_left[1] + 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
+    parking_data.append({
+        "id": "W",
+        "type": "W",  # Wjazd
+        "top_left": entrance_top_left,
+        "bottom_right": entrance_bottom_right
+    })
+
+    return frame, parking_data
+
+
+
+
+video_path = "vid1.mp4"
+cap = cv2.VideoCapture(video_path)
+
+
+fps = int(cap.get(cv2.CAP_PROP_FPS))
+frame_interval = fps * 20
+
+scale_percent = 50
+frame_counter = 0
+
+while cap.isOpened():
+    ret, frame = cap.read()
+    if not ret:
+        break
+
+    # Przycinanie góra-dół
+    height, width, _ = frame.shape
+    crop_top = int(height * 0.10)
+    crop_bottom = int(height * 0.7)
+    frame = frame[crop_top:crop_bottom, :]
+
+    width = int(frame.shape[1] * scale_percent / 100)
+    height = int(frame.shape[0] * scale_percent / 100)
+    frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+
+    # czerwone punkty
+    points = detect_and_mark_red_points(frame)
+    frame_with_marks, parking_data = draw_parking_boundary(frame, points)
+
+
+    cv2.imshow("Parking Boundary", frame_with_marks)
+
+    # Wypisuj dane co 20 sekund
+    frame_counter += 1
+    if frame_counter % frame_interval == 0:
+        print("Rozpoznane miejsca parkingowe:")
+        for data in parking_data:
+            print(data)
+
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()
+
