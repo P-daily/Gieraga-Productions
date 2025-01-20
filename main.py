@@ -77,7 +77,7 @@ def draw_parking_boundary(frame, points):
     width = x_max - x_min
 
     # Wymiary kolumn
-    entrance_width = int(0.25 * width)
+    entrance_width = int(0.29 * width)
     parking_width = (width - entrance_width) // 4
 
     # Podział na 3 wiersze
@@ -99,10 +99,6 @@ def draw_parking_boundary(frame, points):
             blue_count, yellow_count = analyze_color_in_area(frame, top_left, bottom_right)
             parking_areas.append((blue_count, yellow_count, top_left, bottom_right))
 
-    # Niebieskie i zółte miejsca
-    inwalidzi_idx = max(range(len(parking_areas)), key=lambda i: parking_areas[i][0])
-    kierownictwo_idx = max(range(len(parking_areas)), key=lambda i: parking_areas[i][1])
-
     # miejsca parkingowe
     parking_data = []
 
@@ -110,14 +106,15 @@ def draw_parking_boundary(frame, points):
     label = 1
     for idx, (blue_count, yellow_count, top_left, bottom_right) in enumerate(parking_areas):
         color = (0, 255, 255)  #Żółty
-        area_type = "N"  #Normlne
+        area_type = "N"  #Normalne
 
-        if idx == inwalidzi_idx:
-            area_type = "I"  # Inwalidzi
-            color = (255, 0, 0)  # Niebieski
-        elif idx == kierownictwo_idx:
+        # Ustalanie miejsc uprzywilejowanych
+        if label == 1:
             area_type = "K"  # Kierownictwo
-            color = (0, 255, 255)  # Żółty
+            color = (0, 0, 0)  # Żółty
+        elif label == 5:
+            area_type = "I"  # Inwalidzi
+            color = (255, 255, 255)  # Niebieski
 
         # Dodanie informacji do danych
         parking_data.append({
@@ -168,7 +165,7 @@ def draw_parking_boundary(frame, points):
 
 
 # Wywołanie i pokazanie działania
-video_path = "vid1.mp4"
+video_path = "vid2.mp4"
 cap = cv2.VideoCapture(video_path)
 
 
