@@ -61,7 +61,6 @@ def analyze_color_in_area(frame, top_left, bottom_right):
 
 # Rysowanie układu i generewanie data-packu struktury parkingu
 def draw_parking_boundary(frame, points):
-
     if not points:
         return frame, []
 
@@ -69,10 +68,9 @@ def draw_parking_boundary(frame, points):
     x_min, y_min = np.min(points, axis=0)
     x_max, y_max = np.max(points, axis=0)
 
-
     cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
 
-    # wymiary 'parkingu'
+    # Wymiary parkingu
     height = y_max - y_min
     width = x_max - x_min
 
@@ -80,9 +78,9 @@ def draw_parking_boundary(frame, points):
     entrance_width = int(0.29 * width)
     parking_width = (width - entrance_width) // 4
 
-    # Podział na 3 wiersze
-    row_heights = [0.33 * height, 0.34 * height, 0.33 * height]
-    row_starts = [y_min + int(sum(row_heights[:i])) for i in range(3)]
+    # Podział na wiersze
+    row_heights = [0.33 * height, 0.17 * height, 0.17 * height, 0.33 * height]
+    row_starts = [y_min + int(sum(row_heights[:i])) for i in range(4)]
     row_starts.append(y_max)
 
     # Punkty początkowe kolumn
@@ -90,33 +88,43 @@ def draw_parking_boundary(frame, points):
     col_starts.append(x_max - entrance_width)
     col_starts.append(x_max)
 
-    # Kolorki
     parking_areas = []
-    for row_idx in [0, 2]:
+    for row_idx in [0, 3]:
         for col_idx in range(4):
             top_left = (col_starts[col_idx], row_starts[row_idx])
             bottom_right = (col_starts[col_idx + 1], row_starts[row_idx + 1])
             blue_count, yellow_count = analyze_color_in_area(frame, top_left, bottom_right)
             parking_areas.append((blue_count, yellow_count, top_left, bottom_right))
 
-    # miejsca parkingowe
     parking_data = []
-
-    # Rysowanie miejsc parkingowych i label
     label = 1
-    for idx, (blue_count, yellow_count, top_left, bottom_right) in enumerate(parking_areas):
-        color = (0, 255, 255)  #Żółty
-        area_type = "N"  #Normalne
 
-        # Ustalanie miejsc uprzywilejowanych
+    # Wyjazd
+    exit_top_left = (col_starts[2], row_starts[2])
+    exit_bottom_right = (col_starts[4], row_starts[3])
+    cv2.rectangle(frame, exit_top_left, exit_bottom_right, (0, 0, 255), 2)
+    cv2.putText(frame, "Wyjazd",
+                (exit_top_left[0] + 10, exit_top_left[1] + 30),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+
+    parking_data.append({
+        "id": "X",
+        "type": "X",  # Wyjazd
+        "top_left": exit_top_left,
+        "bottom_right": exit_bottom_right
+    })
+
+    for idx, (blue_count, yellow_count, top_left, bottom_right) in enumerate(parking_areas):
+        color = (0, 255, 255)  # Żółty
+        area_type = "N"
+
         if label == 1:
             area_type = "K"  # Kierownictwo
-            color = (0, 0, 0)  # Żółty
+            color = (0, 0, 0)  # Czarny
         elif label == 5:
             area_type = "I"  # Inwalidzi
-            color = (255, 255, 255)  # Niebieski
+            color = (255, 255, 255)  # Biały
 
-        # Dodanie informacji do danych
         parking_data.append({
             "id": label,
             "type": area_type,
@@ -124,18 +132,17 @@ def draw_parking_boundary(frame, points):
             "bottom_right": bottom_right
         })
 
-        # Rysowanie
         cv2.rectangle(frame, top_left, bottom_right, (255, 0, 0), 2)
         cv2.putText(frame, f"{label} {area_type}",
                     (top_left[0] + 10, top_left[1] + 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
         label += 1
 
-    # droga
+    # Droga
     road_top_left = (x_min, row_starts[1])
-    road_bottom_right = (x_max - entrance_width, row_starts[2])
-    cv2.putText(frame, "droga",
-                (x_min + 10, row_starts[1] + int(row_heights[1] // 2)),
+    road_bottom_right = (x_max - entrance_width, row_starts[3])
+    cv2.putText(frame, "Droga",
+                (x_min + 10, row_starts[1] + int((row_heights[1] + row_heights[2]) // 2)),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 255), 2)
 
     parking_data.append({
@@ -160,12 +167,15 @@ def draw_parking_boundary(frame, points):
         "bottom_right": entrance_bottom_right
     })
 
+
+
     return frame, parking_data
 
 
 
+
 # Wywołanie i pokazanie działania
-video_path = "vid2.mp4"
+video_path = "vid1.mp4"
 cap = cv2.VideoCapture(video_path)
 
 
